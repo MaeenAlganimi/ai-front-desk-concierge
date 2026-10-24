@@ -90,7 +90,11 @@ async function runTurn(
   )?.replace(/[\s()-]/g, "");
   if (phone && !/^\+?\d{7,15}$/.test(phone))
     throw new Error("Please provide a valid phone number");
-  if (phone) {
+  if (
+    phone &&
+    !isPromptInjection(input.message) &&
+    !isMedicalAdvice(input.message)
+  ) {
     const old = conversation.customer_id
       ? (
           await db.query<{ phone: string }>(
@@ -284,19 +288,24 @@ async function runTurn(
           if (args.appointment_id === "$previous")
             args.appointment_id = lastAppointment;
           const start = performance.now();
-          const result = await executeTool(call.name, args, {
-            db: tx,
-            conversationId: id,
-            customerId: conversation.customer_id || undefined,
-          });
-          if (result.error) throw new Error(String(result.error));
-          if (call.name !== "create_reminder")
-            lastAppointment = String(result.id || "");
+          let result: ToolResult;
+          try {
+            result = await executeTool(call.name, args, {
+              db: tx,
+              conversationId: id,
+              customerId: conversation.customer_id || undefined,
+            });
+          } catch {
+            result = { error: "Tool execution failed. Please try again." };
+          }
           executed.push({
             call: { name: call.name, args },
             result,
             latency: performance.now() - start,
           });
+          if (result.error) throw new Error(String(result.error));
+          if (call.name !== "create_reminder")
+            lastAppointment = String(result.id || "");
         }
         await tx.query(
           "UPDATE concierge_conversations SET pending_action=NULL WHERE id=$1",

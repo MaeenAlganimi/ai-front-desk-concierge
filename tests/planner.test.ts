@@ -68,3 +68,42 @@ describe("deterministic planner parsing", () => {
     });
   });
 });
+
+describe("follow-up intent and standalone reminders", () => {
+  it("keeps a reminder about an existing appointment separate from booking", () => {
+    expect(parseIntent("remind me about my appointment").action).toBe(
+      "reminder",
+    );
+    expect(parseIntent("ذكرني بموعدي").action).toBe("reminder");
+    expect(parseIntent("عايز اتكلم مع موظف عن موعدي").action).toBe("handoff");
+  });
+  it("uses memory when a user changes a proposed date", async () => {
+    const p = await new MockLLM().plan({
+      message: "2026-11-02 at 6pm",
+      lang: "en",
+      customerPhone: "0501234567",
+      history: [
+        { role: "user", content: "Book a cleaning tomorrow" },
+        {
+          role: "assistant",
+          content: "Shall I confirm? Nothing changes until you confirm.",
+        },
+      ],
+      results: [
+        {
+          call: { name: "lookup_customer", args: { phone: "0501234567" } },
+          result: { appointments: [] },
+        },
+      ],
+      today: "2026-10-24",
+    });
+    expect(p.calls?.[0]).toMatchObject({
+      name: "check_availability",
+      args: {
+        service: "cleaning",
+        date_from: "2026-11-02",
+        after_time: "18:00",
+      },
+    });
+  });
+});

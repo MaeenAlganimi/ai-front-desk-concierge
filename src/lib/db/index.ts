@@ -1,10 +1,12 @@
 import { PGlite } from "@electric-sql/pglite";
 import { vector } from "@electric-sql/pglite/vector";
 import { readFile } from "node:fs/promises";
-import { join } from "node:path";
+import { mkdirSync } from "node:fs";
+import { dirname, join } from "node:path";
 import { seed } from "./seed";
 export type Database = PGlite;
 export async function createDatabase(path = "memory://"): Promise<Database> {
+  if (!path.startsWith("memory://")) mkdirSync(dirname(path), { recursive: true });
   const db = new PGlite(path, { extensions: { vector } });
   try {
     await db.exec(

@@ -388,7 +388,7 @@ async function withRetry<T>(fn: (attempt: number) => Promise<T>, tries = 6): Pro
       return await fn(i);
     } catch (error) {
       const msg = String(error);
-      if (i >= tries - 1 || !/429|500|503|UNAVAILABLE|RESOURCE_EXHAUSTED/.test(msg)) throw error;
+      if (i >= tries - 1 || /PerDay|per day/i.test(msg) || !/429|500|503|UNAVAILABLE|RESOURCE_EXHAUSTED/.test(msg)) throw error; // daily quota: fail fast
       await new Promise((r) => setTimeout(r, Math.min(30000, 2000 * 2 ** i)));
     }
   }

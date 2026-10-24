@@ -366,7 +366,8 @@ async function runTurn(
         results,
         today: new Date().toISOString().slice(0, 10),
       });
-    } catch {
+    } catch (error) {
+      console.error("[concierge] LLM error:", String(error).slice(0, 300));
       return finish(
         text(
           "The assistant is temporarily unavailable. Please try again, or ask our team for help.",

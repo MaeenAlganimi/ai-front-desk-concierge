@@ -1,0 +1,15 @@
+CREATE EXTENSION IF NOT EXISTS vector;
+CREATE TABLE IF NOT EXISTS concierge_customers (id TEXT PRIMARY KEY, name TEXT NOT NULL, phone TEXT UNIQUE NOT NULL, notes TEXT DEFAULT '');
+CREATE TABLE IF NOT EXISTS concierge_services (id TEXT PRIMARY KEY, name TEXT NOT NULL, name_ar TEXT NOT NULL, duration_minutes INT NOT NULL, price INT NOT NULL, category TEXT NOT NULL);
+CREATE TABLE IF NOT EXISTS concierge_staff (id TEXT PRIMARY KEY, name TEXT NOT NULL, name_ar TEXT NOT NULL, role TEXT NOT NULL, service_ids JSONB NOT NULL);
+CREATE TABLE IF NOT EXISTS concierge_opening_hours (day INT PRIMARY KEY, opens TEXT NOT NULL, closes TEXT NOT NULL, closed BOOLEAN DEFAULT false);
+CREATE TABLE IF NOT EXISTS concierge_appointments (id TEXT PRIMARY KEY, customer_id TEXT NOT NULL REFERENCES concierge_customers(id), service_id TEXT NOT NULL REFERENCES concierge_services(id), staff_id TEXT NOT NULL REFERENCES concierge_staff(id), starts_at TIMESTAMPTZ NOT NULL, ends_at TIMESTAMPTZ NOT NULL, status TEXT NOT NULL DEFAULT 'booked' CHECK(status IN ('booked','cancelled')), source TEXT NOT NULL DEFAULT 'staff', created_at TIMESTAMPTZ DEFAULT now());
+CREATE TABLE IF NOT EXISTS concierge_conversations (id TEXT PRIMARY KEY, customer_id TEXT REFERENCES concierge_customers(id), lang TEXT DEFAULT 'en', pending_action JSONB, created_at TIMESTAMPTZ DEFAULT now(), updated_at TIMESTAMPTZ DEFAULT now());
+CREATE TABLE IF NOT EXISTS concierge_messages (id TEXT PRIMARY KEY, conversation_id TEXT NOT NULL REFERENCES concierge_conversations(id), role TEXT NOT NULL, content TEXT NOT NULL, turn INT NOT NULL, created_at TIMESTAMPTZ DEFAULT now());
+CREATE TABLE IF NOT EXISTS concierge_tool_calls (id TEXT PRIMARY KEY, conversation_id TEXT NOT NULL REFERENCES concierge_conversations(id), turn INT NOT NULL, step INT NOT NULL, tool TEXT NOT NULL, args JSONB NOT NULL, result JSONB NOT NULL, latency_ms INT NOT NULL, kind TEXT NOT NULL CHECK(kind IN ('tool','guardrail','confirm')), created_at TIMESTAMPTZ DEFAULT now());
+CREATE TABLE IF NOT EXISTS concierge_reminders (id TEXT PRIMARY KEY, appointment_id TEXT NOT NULL REFERENCES concierge_appointments(id), customer_id TEXT NOT NULL REFERENCES concierge_customers(id), remind_at TIMESTAMPTZ NOT NULL, status TEXT DEFAULT 'scheduled', created_at TIMESTAMPTZ DEFAULT now());
+CREATE TABLE IF NOT EXISTS concierge_handoffs (id TEXT PRIMARY KEY, conversation_id TEXT NOT NULL REFERENCES concierge_conversations(id), reason TEXT NOT NULL, summary TEXT NOT NULL, priority TEXT NOT NULL CHECK(priority IN ('normal','urgent')), status TEXT DEFAULT 'open', created_at TIMESTAMPTZ DEFAULT now(), resolved_at TIMESTAMPTZ);
+CREATE TABLE IF NOT EXISTS concierge_kb_chunks (id TEXT PRIMARY KEY, content TEXT NOT NULL, lang TEXT NOT NULL, embedding vector(768));
+CREATE INDEX IF NOT EXISTS concierge_appointments_time ON concierge_appointments(starts_at);
+CREATE INDEX IF NOT EXISTS concierge_messages_conversation ON concierge_messages(conversation_id);
+CREATE INDEX IF NOT EXISTS concierge_trace_conversation ON concierge_tool_calls(conversation_id);

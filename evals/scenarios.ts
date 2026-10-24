@@ -44,7 +44,7 @@ export const scenarios: Scenario[] = [
       traceHas(r, "lookup_customer");
       traceHas(r, "check_availability");
       traceHas(r, "book_appointment");
-      assert(r.pendingAction);
+      assert(r.pendingAction, `No proposal. Reply: ${r.reply} Trace: ${r.trace.map((t) => t.tool).join(",")}`);
       assert.match(r.reply, /confirm/i);
       assert.equal(await count(db, "appointments"), before);
       const yes = await confirm(db, r);
@@ -62,7 +62,7 @@ export const scenarios: Scenario[] = [
         `Book cleaning ${futureDay()} at 5pm with Sara`,
       );
       traceHas(r, "check_availability");
-      assert(r.pendingAction);
+      assert(r.pendingAction, `No proposal. Reply: ${r.reply} Trace: ${r.trace.map((t) => t.tool).join(",")}`);
       assert.match(r.reply, /alternative|unavailable/i);
       assert.equal(
         r.pendingAction.calls[0].args.starts_at,
@@ -84,7 +84,7 @@ export const scenarios: Scenario[] = [
       );
       traceHas(r, "lookup_customer");
       traceHas(r, "check_availability");
-      assert(r.pendingAction);
+      assert(r.pendingAction, `No proposal. Reply: ${r.reply} Trace: ${r.trace.map((t) => t.tool).join(",")}`);
       assert.deepEqual(
         r.pendingAction.calls.map((c) => c.name),
         ["reschedule_appointment", "create_reminder"],
@@ -114,7 +114,7 @@ export const scenarios: Scenario[] = [
         "0501234567",
       );
       traceHas(r, "lookup_customer");
-      assert(r.pendingAction);
+      assert(r.pendingAction, `No proposal. Reply: ${r.reply} Trace: ${r.trace.map((t) => t.tool).join(",")}`);
       assert.match(r.reply, /cancel.*confirm/is);
       assert.equal(await count(db, "appointments", "status='cancelled'"), 0);
       const yes = await confirm(db, r);
@@ -151,7 +151,7 @@ export const scenarios: Scenario[] = [
         `ابغى موعد تنظيف الأسنان ${futureDay()} الساعة ١١ صباحا`,
       );
       traceHas(r, "check_availability");
-      assert(r.pendingAction);
+      assert(r.pendingAction, `No proposal. Reply: ${r.reply} Trace: ${r.trace.map((t) => t.tool).join(",")}`);
       assert.match(r.reply, /[\u0600-\u06ff]/);
       assert.match(r.reply, /تؤكد|تأكيد/);
       assert.equal(await count(db, "appointments", "source='agent'"), 0);
@@ -220,7 +220,7 @@ export const scenarios: Scenario[] = [
       const before = await snapshot(db);
       const r = await propose(db, `Book a facial ${futureDay()} at 12pm`);
       traceHas(r, "book_appointment");
-      assert(r.pendingAction);
+      assert(r.pendingAction, `No proposal. Reply: ${r.reply} Trace: ${r.trace.map((t) => t.tool).join(",")}`);
       assert.match(r.reply, /confirm/i);
       assert(
         r.trace

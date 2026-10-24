@@ -15,13 +15,19 @@ async function main() {
     details: string;
   }[] = [];
   let quotaHit = false;
-  for (const scenario of scenarios) {
+  const only = process.argv.find((a) => a.startsWith("--only="))?.slice(7).split(",").map(Number);
+  for (const [index, scenario] of scenarios.entries()) {
+    if (only && !only.includes(index + 1)) continue;
     if (quotaHit) {
       results.push({ scenario: scenario.name, status: "SKIP", ms: 0, details: "Not run: Gemini quota exhausted (429)" });
       console.log(`SKIP  ${scenario.name} (quota)`);
       continue;
     }
+    if (live && results.length) await new Promise((r) => setTimeout(r, Number(process.env.EVAL_GAP_MS ?? 20000)));
+    let attempt = 0;
+    retry: for (;;) {
     const start = performance.now();
+    (globalThis as { __lastLlmError?: string }).__lastLlmError = undefined;
     let db;
     try {
       db = await createDatabase("memory://");
@@ -37,14 +43,24 @@ async function main() {
         scenario: scenario.name,
         status: "FAIL",
         ms: Math.round(performance.now() - start),
-        details: error instanceof Error ? error.message : String(error),
+        details: (error instanceof Error ? error.message : String(error)) + ((globalThis as { __lastLlmError?: string }).__lastLlmError ? ` [LLM error: ${(globalThis as { __lastLlmError?: string }).__lastLlmError}]` : ""),
       });
     } finally {
       await db?.close();
     }
     const row = results.at(-1)!;
-    if (live && /429|RESOURCE_EXHAUSTED|quota/i.test(row.details + ((globalThis as { __lastLlmError?: string }).__lastLlmError ?? "")))
-      quotaHit = true;
+    if (live && row.status === "FAIL" && /429|RESOURCE_EXHAUSTED|quota|503|UNAVAILABLE/i.test(row.details)) {
+      if (attempt++ < 2) {
+        console.log(`RETRY ${scenario.name} after transient Gemini error; waiting 65s`);
+        results.pop();
+        await new Promise((r) => setTimeout(r, 65000));
+        continue retry;
+      }
+      if (/429|RESOURCE_EXHAUSTED|quota/i.test(row.details)) quotaHit = true;
+    }
+    break;
+    }
+    const row = results.at(-1)!;
     console.log(`${row.status.padEnd(4)}  ${row.scenario} (${row.ms}ms)`);
     if (row.details) console.error(row.details);
   }

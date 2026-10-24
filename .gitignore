@@ -43,3 +43,4 @@ next-env.d.ts
 # Local concierge data
 .data/
 tsconfig.tsbuildinfo
+.dbg/

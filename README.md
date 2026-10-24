@@ -86,7 +86,7 @@ npm test && npm run evals
 | `SESSION_SECRET` | Optional separate key for signing sessions (defaults to `STAFF_PASSWORD`). |
 | `DATABASE_URL` | Hosted Postgres with pgvector. If unset, embedded PGlite in `.data/` is used. |
 | `DATABASE_DRIVER` | `neon` (WebSocket over 443) or `pg` (TCP 5432). Auto: `neon` for `*.neon.tech`, else `pg`. |
-| `BUSINESS_TIMEZONE` | IANA zone, e.g. `Africa/Tripoli`, `Asia/Dubai`. Used when the database is first seeded; default `UTC`. |
+| `BUSINESS_TIMEZONE` | IANA zone, e.g. `Asia/Dubai`, `Europe/London`. Used when the database is first seeded; default `UTC`. |
 | `BUSINESS_NAME` | Business name stored with the timezone. |
 | `GEMINI_API_KEY`, `GEMINI_MODEL` | Live AI; without a key the mock planner runs. |
 

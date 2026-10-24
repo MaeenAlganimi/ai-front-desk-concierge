@@ -1,4 +1,5 @@
-import type { PGlite } from "@electric-sql/pglite";
+import type { Database } from "./index";
+import { DEFAULT_TIMEZONE, isValidTimeZone, zonedParts, zonedToUtc } from "../time";
 import { embed } from "../agent/embeddings";
 
 export const isoDay = (date = new Date()) => date.toISOString().slice(0, 10);
@@ -41,9 +42,22 @@ export const services = [
     category: "beauty",
   },
 ];
-export async function seed(db: PGlite) {
+export function seedTimeZone() {
+  const tz = process.env.BUSINESS_TIMEZONE || DEFAULT_TIMEZONE;
+  if (!isValidTimeZone(tz)) throw new Error(`Invalid BUSINESS_TIMEZONE: ${tz}`);
+  return tz;
+}
+export async function seed(db: Database) {
+  await db.query(
+    "INSERT INTO concierge_business (id,name,timezone) VALUES ('default',$1,$2) ON CONFLICT (id) DO NOTHING",
+    [process.env.BUSINESS_NAME || "Noor Dental & Beauty Studio", seedTimeZone()],
+  );
   if ((await db.query("SELECT id FROM concierge_services LIMIT 1")).rows.length)
     return;
+  const tz = (
+    await db.query<{ timezone: string }>("SELECT timezone FROM concierge_business WHERE id='default'")
+  ).rows[0].timezone;
+  const at = (day: string, time: string) => zonedToUtc(day, time, tz).toISOString();
   await db.transaction(async (tx) => {
     for (const s of services)
       await tx.query(
@@ -87,9 +101,9 @@ export async function seed(db: PGlite) {
     ])
       await tx.query("INSERT INTO concierge_customers VALUES ($1,$2,$3,$4)", c);
     for (let i = 0; i < 14; i++) {
-      const date = addDays(new Date(), i);
-      if (date.getUTCDay() === 5) continue;
-      const day = isoDay(date);
+      const local = zonedParts(addDays(new Date(), i), tz);
+      if (local.weekday === 5) continue;
+      const day = local.date;
       await tx.query(
         "INSERT INTO concierge_appointments (id,customer_id,service_id,staff_id,starts_at,ends_at) VALUES ($1,$2,$3,$4,$5,$6)",
         [
@@ -97,8 +111,8 @@ export async function seed(db: PGlite) {
           "amina",
           "cleaning",
           "sara",
-          `${day}T17:00:00Z`,
-          `${day}T17:45:00Z`,
+          at(day, "17:00"),
+          at(day, "17:45"),
         ],
       );
       await tx.query(
@@ -108,8 +122,8 @@ export async function seed(db: PGlite) {
           "yousef",
           "consultation",
           "omar",
-          `${day}T10:00:00Z`,
-          `${day}T10:30:00Z`,
+          at(day, "10:00"),
+          at(day, "10:30"),
         ],
       );
       if (i % 2 === 0)
@@ -120,8 +134,8 @@ export async function seed(db: PGlite) {
             "maya",
             "facial",
             "lina",
-            `${day}T14:00:00Z`,
-            `${day}T15:00:00Z`,
+            at(day, "14:00"),
+            at(day, "15:00"),
           ],
         );
     }
@@ -139,7 +153,7 @@ export async function seed(db: PGlite) {
       [
         "hours-en",
         "en",
-        "Open Saturday through Thursday, 09:00–20:00 studio time (UTC). Closed Friday. You can reschedule or cancel before your appointment.",
+        "Open Saturday through Thursday, 09:00–20:00 studio local time. Closed Friday. You can reschedule or cancel before your appointment.",
       ],
       [
         "policy-en",
@@ -159,7 +173,7 @@ export async function seed(db: PGlite) {
       [
         "hours-ar",
         "ar",
-        "مواعيد العمل من السبت إلى الخميس من الساعة 9 صباحاً إلى 8 مساءً بتوقيت الاستوديو UTC. مغلق يوم الجمعة. يمكنك تغيير أو إلغاء موعدك.",
+        "مواعيد العمل من السبت إلى الخميس من الساعة 9 صباحاً إلى 8 مساءً بالتوقيت المحلي للاستوديو. مغلق يوم الجمعة. يمكنك تغيير أو إلغاء موعدك.",
       ],
       [
         "policy-ar",

@@ -1,7 +1,8 @@
 import { randomUUID } from "node:crypto";
 import { getDb, type Database } from "../db";
+import { todayIn } from "../time";
 import { getLLM, type LLM } from "./llm";
-import { executeTool, toolSchemas, writeTools, type ToolName } from "./tools";
+import { businessTimeZone, executeTool, toolSchemas, writeTools, type ToolName } from "./tools";
 import {
   detectLanguage,
   isConfirmation,
@@ -352,6 +353,7 @@ async function runTurn(
     await clearPending();
     await log("confirmation", {}, { status: "superseded" }, "confirm");
   }
+  const timeZone = await businessTimeZone(db);
   const results: { call: ToolCall; result: ToolResult }[] = [];
   let steps = 0;
   while (steps < 6) {
@@ -364,10 +366,12 @@ async function runTurn(
         customerPhone: phone,
         history,
         results,
-        today: new Date().toISOString().slice(0, 10),
+        today: todayIn(timeZone),
+        timeZone,
       });
     } catch (error) {
       console.error("[concierge] LLM error:", String(error).slice(0, 300));
+      (globalThis as { __lastLlmError?: string }).__lastLlmError = String(error).slice(0, 300);
       return finish(
         text(
           "The assistant is temporarily unavailable. Please try again, or ask our team for help.",

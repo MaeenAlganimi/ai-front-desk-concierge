@@ -13,3 +13,4 @@ CREATE TABLE IF NOT EXISTS concierge_kb_chunks (id TEXT PRIMARY KEY, content TEX
 CREATE INDEX IF NOT EXISTS concierge_appointments_time ON concierge_appointments(starts_at);
 CREATE INDEX IF NOT EXISTS concierge_messages_conversation ON concierge_messages(conversation_id);
 CREATE INDEX IF NOT EXISTS concierge_trace_conversation ON concierge_tool_calls(conversation_id);
+CREATE TABLE IF NOT EXISTS concierge_business (id TEXT PRIMARY KEY, name TEXT NOT NULL, timezone TEXT NOT NULL DEFAULT 'UTC');

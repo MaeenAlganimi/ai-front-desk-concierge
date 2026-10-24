@@ -1,10 +1,18 @@
 import { z } from "zod";
 import { randomUUID } from "node:crypto";
-import type { Database } from "../db";
+import type { Queryable } from "../db";
+import { DEFAULT_TIMEZONE, toZonedIso, zonedParts, zonedToUtc } from "../time";
 import { embed } from "./embeddings";
 import type { Args, ToolResult } from "./types";
 
-type Queryable = Pick<Database, "query">;
+export async function businessTimeZone(db: Queryable) {
+  const row = (
+    await db
+      .query<{ timezone: string }>("SELECT timezone FROM concierge_business WHERE id='default'")
+      .catch(() => ({ rows: [] as { timezone: string }[] }))
+  ).rows[0];
+  return row?.timezone || DEFAULT_TIMEZONE;
+}
 export type ToolContext = {
   db: Queryable;
   conversationId: string;
@@ -67,7 +75,7 @@ export const toolDeclarations = Object.entries(toolSchemas).map(
     description: (
       {
         check_availability:
-          "Find available studio slots within opening hours. All dates and times are UTC studio time.",
+          "Find available studio slots within opening hours. date_from, date_to and after_time are in the studio's local timezone; results include starts_at (UTC) and starts_at_local (studio local time with offset).",
         lookup_customer:
           "Look up customer and their booked appointments by phone or name.",
         book_appointment: "Propose booking a slot; requires user confirmation.",
@@ -127,19 +135,21 @@ async function slotAvailable(
   )
     return false;
   const end = new Date(start.getTime() + service.duration_minutes * 60000);
+  const tz = await businessTimeZone(db);
+  const ls = zonedParts(start, tz),
+    le = zonedParts(end, tz);
   const hours = (
     await db.query<{ opens: string; closes: string; closed: boolean }>(
       "SELECT * FROM concierge_opening_hours WHERE day=$1",
-      [start.getUTCDay()],
+      [ls.weekday],
     )
   ).rows[0];
-  const time = start.toISOString().slice(11, 16);
   if (
     !hours ||
     hours.closed ||
-    time < hours.opens ||
-    end.toISOString().slice(0, 10) !== start.toISOString().slice(0, 10) ||
-    end.toISOString().slice(11, 16) > hours.closes
+    ls.time < hours.opens ||
+    le.date !== ls.date ||
+    le.time > hours.closes
   )
     return false;
   const conflicts = await db.query(
@@ -165,6 +175,7 @@ export async function executeTool(
   if (name === "check_availability") {
     const s = await serviceFor(db, a.service as string);
     if (!s) return { error: "Unknown service" };
+    const tz = await businessTimeZone(db);
     const from = new Date(`${a.date_from}T00:00:00Z`),
       to = new Date(`${a.date_to}T00:00:00Z`);
     if (
@@ -179,6 +190,7 @@ export async function executeTool(
     );
     const slots: {
       starts_at: string;
+      starts_at_local: string;
       ends_at: string;
       staff: string;
       staff_name: string;
@@ -209,12 +221,13 @@ export async function executeTool(
         minute + s.duration_minutes <= closeMinutes && slots.length < 24;
         minute += 15
       ) {
-        const start = new Date(d);
-        start.setUTCHours(Math.floor(minute / 60), minute % 60, 0, 0);
+        const hhmm = `${String(Math.floor(minute / 60)).padStart(2, "0")}:${String(minute % 60).padStart(2, "0")}`;
+        const start = zonedToUtc(d.toISOString().slice(0, 10), hhmm, tz);
         for (const p of staff)
           if (await slotAvailable(db, s, p, start))
             slots.push({
               starts_at: start.toISOString(),
+              starts_at_local: toZonedIso(start, tz),
               ends_at: new Date(
                 +start + s.duration_minutes * 60000,
               ).toISOString(),
@@ -224,7 +237,7 @@ export async function executeTool(
             });
       }
     }
-    return { slots, timezone: "UTC", service: s.name };
+    return { slots, timezone: tz, service: s.name };
   }
   if (name === "lookup_customer") {
     const customer = (
@@ -294,6 +307,7 @@ export async function executeTool(
       id,
       status: "booked",
       starts_at: start.toISOString(),
+      starts_at_local: toZonedIso(start, await businessTimeZone(db)),
       service: s.name,
       staff: staff.name,
     };
@@ -347,6 +361,7 @@ export async function executeTool(
       id: appointment.id,
       status: "rescheduled",
       starts_at: start.toISOString(),
+      starts_at_local: toZonedIso(start, await businessTimeZone(db)),
       service: s.name,
     };
   }

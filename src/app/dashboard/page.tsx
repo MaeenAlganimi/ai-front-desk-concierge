@@ -72,13 +72,14 @@ function monday(date: Date) {
 }
 const dayString = (d: Date) => d.toISOString().slice(0, 10);
 const dayPlus = (d: Date, n: number) => new Date(+d + n * 86400000);
-const time = (d: string) =>
-  new Date(d).toLocaleTimeString("en", {
-    hour: "2-digit",
-    minute: "2-digit",
-    hour12: false,
-    timeZone: "UTC",
-  });
+const localDay = (d: string, tz: string) =>
+  new Date(d).toLocaleDateString("en-CA", { timeZone: tz });
+const localMinutes = (d: string, tz: string) => {
+  const [h, m] = new Date(d)
+    .toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit", hourCycle: "h23", timeZone: tz })
+    .split(":");
+  return Number(h) * 60 + Number(m);
+};
 async function fetchJson<T>(url: string, signal?: AbortSignal): Promise<T> {
   const response = await fetch(url, { signal, cache: "no-store" });
   if (!response.ok)
@@ -88,6 +89,14 @@ async function fetchJson<T>(url: string, signal?: AbortSignal): Promise<T> {
 export default function Dashboard() {
   const [week, setWeek] = useState(() => monday(new Date()));
   const [appointments, setAppointments] = useState<Appointment[]>([]);
+  const [tz, setTz] = useState("UTC");
+  const time = (d: string) =>
+    new Date(d).toLocaleTimeString("en", {
+      hour: "2-digit",
+      minute: "2-digit",
+      hour12: false,
+      timeZone: tz,
+    });
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [selected, setSelected] = useState("");
   const [messages, setMessages] = useState<Message[]>([]);
@@ -104,7 +113,7 @@ export default function Dashboard() {
     async (signal?: AbortSignal) => {
       try {
         const [a, c, h, s] = await Promise.all([
-          fetchJson<{ appointments: Appointment[] }>(
+          fetchJson<{ appointments: Appointment[]; timezone?: string }>(
             `/api/dashboard/appointments?from=${dayString(week)}&to=${dayString(dayPlus(week, 7))}`,
             signal,
           ),
@@ -117,6 +126,7 @@ export default function Dashboard() {
         ]);
         if (signal?.aborted) return;
         setAppointments(a.appointments);
+        if (a.timezone) setTz(a.timezone);
         setConversations(c.conversations);
         setHandoffs(h.handoffs);
         setAnalytics(s);
@@ -350,7 +360,7 @@ export default function Dashboard() {
                   The week ahead
                 </h2>
                 <p>
-                  {appointments.length} appointments · All times in studio UTC
+                  {appointments.length} appointments · All times in {tz}
                 </p>
               </div>
               <div className="calendar-controls">
@@ -390,7 +400,7 @@ export default function Dashboard() {
             <div className="calendar-scroll">
               <div className="week-calendar">
                 <div className="time-column">
-                  <div className="day-header">UTC</div>
+                  <div className="day-header">{tz}</div>
                   <div className="time-grid">
                     {Array.from({ length: 12 }, (_, i) => (
                       <span key={i} style={{ top: i * 48 }}>
@@ -423,13 +433,12 @@ export default function Dashboard() {
                         ))}
                         {appointments
                           .filter(
-                            (a) => a.starts_at.slice(0, 10) === dayString(d),
+                            (a) => localDay(a.starts_at, tz) === dayString(d),
                           )
                           .map((a) => {
                             const start = new Date(a.starts_at);
                             const top =
-                              ((start.getUTCHours() - 9) * 60 +
-                                start.getUTCMinutes()) *
+                              (localMinutes(a.starts_at, tz) - 9 * 60) *
                               0.8;
                             const duration =
                               (+new Date(a.ends_at) - +start) / 60000;
@@ -450,7 +459,7 @@ export default function Dashboard() {
                                     : "3%",
                                 }}
                                 key={a.id}
-                                title={`${a.customer_name} · ${a.service_name} · ${a.staff_name} · ${time(a.starts_at)}–${time(a.ends_at)} UTC`}
+                                title={`${a.customer_name} · ${a.service_name} · ${a.staff_name} · ${time(a.starts_at)}–${time(a.ends_at)} ${tz}`}
                               >
                                 <b>
                                   {time(a.starts_at)} · {a.customer_name}
@@ -807,7 +816,7 @@ export default function Dashboard() {
           </div>
           <footer className="dash-footer">
             <span>Qudra Concierge · Noor Studio demo</span>
-            <span>Persisted locally with PGlite</span>
+            <span>Postgres (hosted via DATABASE_URL, or local PGlite)</span>
           </footer>
         </main>
       </div>

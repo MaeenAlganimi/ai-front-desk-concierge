@@ -23,5 +23,6 @@ export type PlannerContext = {
   history: HistoryMessage[];
   results: { call: ToolCall; result: ToolResult }[];
   today: string;
+  timeZone?: string;
 };
 export type Plan = { calls?: ToolCall[]; reply?: string };

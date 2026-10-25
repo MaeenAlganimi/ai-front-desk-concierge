@@ -1,4 +1,6 @@
 "use client";
+import { AnimatePresence, MotionConfig, motion, type Variants } from "motion/react";
+import LiveCalendar from "@/components/LiveCalendar";
 import { useEffect, useState } from "react";
 import Script from "next/script";
 import Link from "next/link";
@@ -170,6 +172,15 @@ const faqs = [
     "يساعدك المساعد بالمواعيد ومعلومات الاستوديو. للتشخيص أو الدواء أو نصائح العلاج يمكنه تحويلك للفريق أو حجز استشارة.",
   ],
 ];
+const ease = [0.22, 1, 0.36, 1] as const;
+const rise: Variants = {
+  hidden: { opacity: 0, y: 28 },
+  show: { opacity: 1, y: 0, transition: { duration: 0.7, ease } },
+};
+const stagger: Variants = { hidden: {}, show: { transition: { staggerChildren: 0.09, delayChildren: 0.1 } } };
+const reveal = { initial: "hidden", whileInView: "show", viewport: { once: true, amount: 0.2 } } as const;
+const press = { whileHover: { y: -4 }, whileTap: { scale: 0.97 }, transition: { type: "spring", stiffness: 380, damping: 26 } } as const;
+
 export default function Home() {
   const [lang, setLang] = useState<"en" | "ar">("en");
   const [open, setOpen] = useState<number | null>(0);
@@ -183,6 +194,7 @@ export default function Home() {
   }, [lang, ar]);
   const chat = () => window.dispatchEvent(new CustomEvent("noor:open"));
   return (
+    <MotionConfig reducedMotion="user">
     <main className="studio">
       <div className="announcement">
         {ar
@@ -212,10 +224,10 @@ export default function Home() {
           >
             {ar ? "EN" : "العربية"}
           </button>
-          <button className="header-book" onClick={chat}>
+          <motion.button className="header-book" onClick={chat} whileHover={{ scale: 1.04 }} whileTap={{ scale: 0.96 }}>
             {c.book}
             <ArrowUpRight size={15} />
-          </button>
+          </motion.button>
           <button
             className="menu-button"
             aria-label="Toggle menu"
@@ -226,29 +238,32 @@ export default function Home() {
         </div>
       </header>
       <section className="hero">
-        <div className="hero-copy">
-          <div className="eyebrow">
+        <motion.div className="hero-copy" variants={stagger} initial="hidden" animate="show">
+          <motion.div variants={rise} className="eyebrow">
             <span className="tiny-star">✦</span>
             {c.eyebrow}
-          </div>
-          <h1>{c.title}</h1>
-          <p>{c.desc}</p>
-          <div className="hero-actions">
-            <button className="button-dark" onClick={chat}>
+          </motion.div>
+          <motion.h1 variants={rise}>{c.title}</motion.h1>
+          <motion.p variants={rise}>{c.desc}</motion.p>
+          <motion.div variants={rise} className="hero-actions">
+            <motion.button className="button-dark" onClick={chat} {...press}>
               {c.cta}
               <ArrowUpRight size={18} />
-            </button>
+            </motion.button>
             <a href="#services" className="text-link">
               {c.explore}
               <ArrowRight size={16} />
             </a>
-          </div>
-          <div className="concierge-note">
+          </motion.div>
+          <motion.div variants={rise} className="concierge-note">
             <span className="online-dot" />
             {c.note}
-          </div>
-        </div>
-        <div
+          </motion.div>
+        </motion.div>
+        <motion.div
+          initial={{ opacity: 0, scale: 0.94, y: 24 }}
+          animate={{ opacity: 1, scale: 1, y: 0 }}
+          transition={{ duration: 1, ease, delay: 0.15 }}
           className="hero-art"
           aria-label={
             ar
@@ -260,14 +275,14 @@ export default function Home() {
           <div className="art-grain" />
           <div className="art-arch">
             <div className="arch-inner" />
-            <div className="sun-disc" />
-            <div className="vase">
+            <motion.div className="sun-disc" animate={{ y: [0, -10, 0] }} transition={{ duration: 7, repeat: Infinity, ease: "easeInOut" }} />
+            <motion.div className="vase" animate={{ rotate: [0, 1.2, 0, -1.2, 0] }} transition={{ duration: 9, repeat: Infinity, ease: "easeInOut" }}>
               <div className="stem stem-one" />
               <div className="stem stem-two" />
               <div className="leaf leaf-one" />
               <div className="leaf leaf-two" />
               <div className="leaf leaf-three" />
-            </div>
+            </motion.div>
             <div className="art-plinth" />
           </div>
           <div className="art-caption">
@@ -275,7 +290,7 @@ export default function Home() {
             <span>{ar ? "مساحة لتتألق" : "Room to bloom."}</span>
             <Flower2 size={28} strokeWidth={1} />
           </div>
-          <div className="floating-note">
+          <motion.div className="floating-note" initial={{ opacity: 0, y: 30 }} animate={{ opacity: 1, y: [0, -8, 0] }} transition={{ opacity: { delay: 0.9, duration: 0.6 }, y: { delay: 1.2, duration: 5, repeat: Infinity, ease: "easeInOut" } }}>
             <span className="note-icon">
               <Sparkles size={19} />
             </span>
@@ -283,14 +298,14 @@ export default function Home() {
               {ar ? "لحظتك من الهدوء" : "Your moment of calm"}
               <small>{ar ? "تبدأ هنا" : "Starts right here."}</small>
             </div>
-          </div>
-        </div>
+          </motion.div>
+        </motion.div>
         <div className="hero-bottom">
           <span>01 — A BRIGHTER EVERYDAY</span>
           <span>SCROLL TO SLOW DOWN ↓</span>
         </div>
       </section>
-      <section className="values-strip">
+      <motion.section className="values-strip" variants={stagger} {...reveal}>
         {[
           [Flower2, c.care, c.careDesc],
           [MessageCircle, c.lang, c.langDesc],
@@ -298,25 +313,27 @@ export default function Home() {
         ].map(([Icon, title, desc]) => {
           const I = Icon as typeof Flower2;
           return (
-            <div key={String(title)}>
+            <motion.div variants={rise} key={String(title)}>
               <I size={25} strokeWidth={1.3} />
               <div>
                 <h3>{String(title)}</h3>
                 <p>{String(desc)}</p>
               </div>
-            </div>
+            </motion.div>
           );
         })}
-      </section>
+      </motion.section>
       <section className="section services-section" id="services">
         <div className="eyebrow">{c.section}</div>
-        <div className="section-heading">
+        <motion.div className="section-heading" variants={rise} {...reveal}>
           <h2>{c.services}</h2>
           <p>{c.serviceDesc}</p>
-        </div>
-        <div className="service-grid">
+        </motion.div>
+        <motion.div className="service-grid" variants={stagger} {...reveal}>
           {services.map((s, i) => (
-            <button
+            <motion.button
+              variants={rise}
+              {...press}
               key={s.name}
               className="service-card"
               onClick={() =>
@@ -348,18 +365,19 @@ export default function Home() {
                   <ArrowUpRight size={17} />
                 </span>
               </div>
-            </button>
+            </motion.button>
           ))}
-        </div>
+        </motion.div>
         <p className="fineprint">{c.credits}</p>
       </section>
+      <LiveCalendar ar={ar} />
       <section className="section team-section" id="team">
         <div className="eyebrow">{c.teamTag}</div>
-        <div className="section-heading">
+        <motion.div className="section-heading" variants={rise} {...reveal}>
           <h2>{c.team}</h2>
           <p>{c.teamDesc}</p>
-        </div>
-        <div className="team-grid">
+        </motion.div>
+        <motion.div className="team-grid" variants={stagger} {...reveal}>
           {[
             {
               name: "Dr. Sara Noor",
@@ -383,7 +401,7 @@ export default function Home() {
               tone: "rose",
             },
           ].map((p) => (
-            <article className="team-card" key={p.name}>
+            <motion.article variants={rise} whileHover={{ y: -6 }} className="team-card" key={p.name}>
               <div className={`team-portrait ${p.tone}`}>
                 <Flower2 size={104} strokeWidth={0.6} />
                 <span>{p.initial}</span>
@@ -392,21 +410,21 @@ export default function Home() {
                 <h3>{ar ? p.ar : p.name}</h3>
                 <p>{p.role}</p>
               </div>
-            </article>
+            </motion.article>
           ))}
-        </div>
+        </motion.div>
       </section>
-      <section className="visit-section">
+      <motion.section className="visit-section" variants={rise} {...reveal}>
         <div>
           <div className="eyebrow">
             {ar ? "زيارتك القادمة" : "YOUR NEXT LITTLE ESCAPE"}
           </div>
           <h2>{c.visit}</h2>
           <p>{c.visitDesc}</p>
-          <button className="button-dark" onClick={chat}>
+          <motion.button className="button-dark" onClick={chat} {...press}>
             {c.ask}
             <ArrowUpRight size={17} />
-          </button>
+          </motion.button>
         </div>
         <div className="visit-details">
           <div>
@@ -430,7 +448,7 @@ export default function Home() {
             </section>
           </div>
         </div>
-      </section>
+      </motion.section>
       <section className="section faq-section" id="faq">
         <div>
           <div className="eyebrow">{c.faqTag}</div>
@@ -445,20 +463,35 @@ export default function Home() {
             <ArrowUpRight size={16} />
           </button>
         </div>
-        <div className="faq-list">
+        <motion.div className="faq-list" variants={stagger} {...reveal}>
           {faqs.map((f, i) => (
-            <div className="faq-item" key={i}>
+            <motion.div variants={rise} layout className="faq-item" key={i}>
               <button
                 aria-expanded={open === i}
                 onClick={() => setOpen(open === i ? null : i)}
               >
                 {f[ar ? 2 : 0]}
-                {open === i ? <Minus size={18} /> : <Plus size={18} />}
+                <motion.span animate={{ rotate: open === i ? 180 : 0 }} transition={{ duration: 0.3 }} style={{ display: "inline-flex" }}>
+                  {open === i ? <Minus size={18} /> : <Plus size={18} />}
+                </motion.span>
               </button>
-              {open === i && <p>{f[ar ? 3 : 1]}</p>}
-            </div>
+              <AnimatePresence initial={false}>
+                {open === i && (
+                  <motion.p
+                    key="a"
+                    initial={{ opacity: 0, height: 0 }}
+                    animate={{ opacity: 1, height: "auto" }}
+                    exit={{ opacity: 0, height: 0 }}
+                    transition={{ duration: 0.35, ease }}
+                    style={{ overflow: "hidden" }}
+                  >
+                    {f[ar ? 3 : 1]}
+                  </motion.p>
+                )}
+              </AnimatePresence>
+            </motion.div>
           ))}
-        </div>
+        </motion.div>
       </section>
       <footer className="site-footer">
         <div className="footer-top">
@@ -485,5 +518,6 @@ export default function Home() {
         strategy="afterInteractive"
       />
     </main>
+    </MotionConfig>
   );
 }

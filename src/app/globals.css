@@ -2906,3 +2906,18 @@ html[lang="ar"] .hero-art {
     transition: none !important;
   }
 }
+
+/* Live availability calendar */
+.live-calendar .cal-legend{display:flex;flex-wrap:wrap;gap:18px;align-items:center;font-size:13px;margin:8px 0 18px;color:#4c5a50}
+.live-calendar .cal-legend i{display:inline-block;width:10px;height:10px;border-radius:3px;margin-inline-end:6px;vertical-align:-1px}
+.live-calendar .cal-sync{margin-inline-start:auto;display:inline-flex;gap:6px;align-items:center;padding:5px 11px;border:1px solid rgba(40,60,45,.15);border-radius:99px;background:#fff}
+.cal-grid{position:relative;display:grid;grid-template-columns:52px repeat(5,1fr);gap:10px;background:#fff;border:1px solid rgba(40,60,45,.12);border-radius:22px;padding:18px;box-shadow:0 20px 50px -30px rgba(30,50,35,.35)}
+.cal-hours{position:relative;margin-top:30px;height:340px;font-size:11px;color:#7b867d}
+.cal-hours span{position:absolute;transform:translateY(-50%)}
+.cal-day-label{display:flex;gap:6px;align-items:center;font-size:12px;font-weight:600;letter-spacing:.04em;height:22px;margin-bottom:8px;color:#2f3d33}
+.cal-track{position:relative;height:340px;border-radius:12px;background:repeating-linear-gradient(to bottom,#f6f4ef 0,#f6f4ef 1px,transparent 1px,transparent 31px),#fbfaf7}
+.cal-block{position:absolute;border-radius:8px;color:#fff;font-size:10.5px;font-weight:600;padding:3px 6px;overflow:hidden;box-shadow:0 4px 10px -4px rgba(0,0,0,.25)}
+.cal-block.is-fresh{animation:calGlow 1.8s ease-out 2}
+@keyframes calGlow{0%{box-shadow:0 0 0 0 rgba(47,61,51,.55)}100%{box-shadow:0 0 0 10px rgba(47,61,51,0)}}
+@media (max-width:720px){.cal-grid{grid-template-columns:36px repeat(5,minmax(52px,1fr));overflow-x:auto}}
+@media (prefers-reduced-motion: reduce){.cal-block.is-fresh{animation:none;outline:2px solid #2f3d33}}

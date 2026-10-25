@@ -36,7 +36,7 @@ export type AgentResponse = {
   trace: Trace[];
   pendingAction?: PendingAction;
   conversationId: string;
-  mode: "gemini" | "mock";
+  mode: "gemini" | "mock" | "guided";
 };
 /**
  * "$previous" reminders refer to the booking/move before them, so they must run after it. Models sometimes emit
@@ -66,13 +66,13 @@ const queues = new WeakMap<Database, Promise<unknown>>();
 // Serialise turns on one database, so duplicate confirmation clicks cannot execute a proposal twice.
 export async function runAgent(
   input: Input,
-  options: { db?: Database; llm?: LLM } = {},
+  options: { db?: Database; llm?: LLM; forceGuided?: boolean } = {},
 ): Promise<AgentResponse> {
   const db = options.db || (await getDb());
   const previous = queues.get(db) || Promise.resolve();
   const task = previous
     .catch(() => {})
-    .then(() => runTurn(db, input, options.llm || getLLM()));
+    .then(() => runTurn(db, input, options.llm || getLLM({ forceGuided: options.forceGuided })));
   queues.set(db, task);
   try {
     return await task;

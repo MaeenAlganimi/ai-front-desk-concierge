@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { runAgent } from "@/lib/agent/loop";
 import { json, options } from "@/lib/http";
+import { checkVisitor, visitorId } from "@/lib/ratelimit";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 export const OPTIONS = options;
@@ -14,6 +15,9 @@ const schema = z.object({
   confirm: z.boolean().optional(),
 });
 export async function POST(request: Request) {
+  const visitor = checkVisitor(visitorId(request));
+  if (!visitor.allowed)
+    return json({ error: "Too many messages. Please try again a little later." }, 429);
   let body;
   try {
     body = schema.safeParse(await request.json());
@@ -29,7 +33,7 @@ export async function POST(request: Request) {
       400,
     );
   try {
-    return json(await runAgent(body.data));
+    return json(await runAgent(body.data, { forceGuided: !visitor.live }));
   } catch (error) {
     const message = error instanceof Error ? error.message : "";
     if (/Conversation not found/.test(message))

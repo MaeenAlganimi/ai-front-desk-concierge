@@ -1,3 +1,4 @@
+import { hasGeminiKeys } from "@/lib/agent/keys";
 import { getDb } from "@/lib/db";
 import { json, options } from "@/lib/http";
 export const dynamic = "force-dynamic";
@@ -23,7 +24,7 @@ export async function GET() {
   ).rows;
   return json({
     mode:
-      process.env.GEMINI_API_KEY && process.env.CONCIERGE_MOCK !== "1"
+      hasGeminiKeys()
         ? "gemini"
         : "mock",
     ...counts,

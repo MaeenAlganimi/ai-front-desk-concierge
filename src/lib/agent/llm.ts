@@ -4,9 +4,10 @@ import type { Args } from "./types";
 import type { Plan, PlannerContext, ToolCall } from "./types";
 import { addDays, isoDay } from "../db/seed";
 import { zonedParts } from "../time";
+import { hasGeminiKeys, withKeys, availableKeys } from "./keys";
 
 export interface LLM {
-  mode: "mock" | "gemini";
+  mode: "mock" | "gemini" | "guided";
   plan(context: PlannerContext): Promise<Plan>;
 }
 export function parseIntent(message: string, today = isoDay()) {
@@ -337,7 +338,6 @@ export class MockLLM implements LLM {
 export class GeminiLLM implements LLM {
   mode = "gemini" as const;
   async plan(c: PlannerContext): Promise<Plan> {
-    const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
     const contents: Content[] = c.history.map((m) => ({
       role: m.role === "assistant" ? "model" : "user",
       parts: [{ text: m.content }],
@@ -353,7 +353,7 @@ export class GeminiLLM implements LLM {
       contents.push(raw || { role: "model", parts: batch.map((r) => ({ functionCall: { name: r.call.name, args: r.call.args } })) });
       contents.push({ role: "user", parts: batch.map((r) => ({ functionResponse: { name: r.call.name, response: { untrusted_data: r.result } } })) });
     }
-    const response = await withRetry((attempt, useFallback) => ai.models.generateContent({
+    const response = await withKeys((apiKey) => withRetry((attempt, useFallback) => new GoogleGenAI({ apiKey }).models.generateContent({
       // Primary model, falling back to GEMINI_FALLBACK_MODEL when the primary is overloaded (503) twice or hangs past the timeout.
       model: useFallback && process.env.GEMINI_FALLBACK_MODEL !== "" ? process.env.GEMINI_FALLBACK_MODEL || "gemini-3.5-flash" : process.env.GEMINI_MODEL || "gemini-3.8-flash",
       contents,
@@ -362,7 +362,7 @@ export class GeminiLLM implements LLM {
         systemInstruction: systemInstruction(c),
         tools: [{ functionDeclarations: toolDeclarations }],
       },
-    }));
+    }), Number(process.env.GEMINI_RETRIES_PER_KEY ?? 3)));
     const modelContent = response.candidates?.[0]?.content;
     const calls = response.functionCalls?.map((call, idx) => ({
       name: call.name || "",
@@ -378,10 +378,35 @@ export class GeminiLLM implements LLM {
         };
   }
 }
-export function getLLM(): LLM {
-  return process.env.GEMINI_API_KEY && process.env.CONCIERGE_MOCK !== "1"
-    ? new GeminiLLM()
-    : new MockLLM();
+/**
+ * Live Gemini when any key is ready; otherwise (or as soon as every key fails mid-turn) the deterministic
+ * guided demo planner takes over. It uses the same tools, proposals and confirmation flow as live AI.
+ */
+export class FallbackLLM implements LLM {
+  private guided: boolean;
+  constructor(private live: LLM = new GeminiLLM(), private script: LLM = new MockLLM(), forceGuided = false) {
+    this.guided = forceGuided || availableKeys().length === 0;
+  }
+  get mode() {
+    return this.guided ? ("guided" as const) : ("gemini" as const);
+  }
+  async plan(c: PlannerContext): Promise<Plan> {
+    if (!this.guided) {
+      try {
+        return await this.live.plan(c);
+      } catch (error) {
+        console.error("[concierge] live AI unavailable, guided demo mode:", String(error).slice(0, 200));
+        (globalThis as { __lastLlmError?: string }).__lastLlmError = String(error).slice(0, 300);
+        this.guided = true;
+      }
+    }
+    // Live tool results are compatible with the scripted planner; it continues from them.
+    return this.script.plan(c);
+  }
+}
+export function getLLM(options: { forceGuided?: boolean } = {}): LLM {
+  if (!hasGeminiKeys()) return new MockLLM();
+  return new FallbackLLM(new GeminiLLM(), new MockLLM(), options.forceGuided);
 }
 
 async function withRetry<T>(fn: (attempt: number, useFallback: boolean) => Promise<T>, tries = 6): Promise<T> {
@@ -392,7 +417,7 @@ async function withRetry<T>(fn: (attempt: number, useFallback: boolean) => Promi
     } catch (error) {
       const msg = String(error);
       const timedOut = /abort|timeout|timed out/i.test(msg) || (error as { name?: string })?.name === "TimeoutError";
-      if (i >= tries - 1 || /PerDay|per day/i.test(msg) || (!timedOut && !/429|500|503|UNAVAILABLE|RESOURCE_EXHAUSTED/.test(msg))) throw error; // daily quota: fail fast
+      if (i >= tries - 1 || /PerDay|per day|429|RESOURCE_EXHAUSTED/i.test(msg) || (!timedOut && !/429|500|503|UNAVAILABLE|RESOURCE_EXHAUSTED/.test(msg))) throw error; // daily quota: fail fast
       if (timedOut) useFallback = true; // a hung primary model goes straight to the fallback
       else await new Promise((r) => setTimeout(r, Math.min(30000, 2000 * 2 ** i)));
     }

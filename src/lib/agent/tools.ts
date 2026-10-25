@@ -292,8 +292,15 @@ export async function executeTool(
     return { customer, appointments, timezone: tz };
   }
   if (name === "answer_from_knowledge_base") {
-    const embedding = await embed(String(a.query));
     const lang = /[\u0600-\u06ff]/.test(String(a.query)) ? "ar" : "en";
+    const embedding = await embed(String(a.query)).catch(() => null);
+    // Without live embeddings (all keys resting), return every chunk for the language; the KB is small.
+    if (!embedding)
+      return {
+        chunks: (await db.query<{ id: string; content: string }>("SELECT id,content FROM concierge_kb_chunks WHERE lang=$1 ORDER BY id", [lang])).rows,
+        source: "Studio knowledge base",
+        data_only: true,
+      };
     const chunks = (
       await db.query<{ id: string; content: string; distance: number }>(
         "SELECT id,content,embedding <=> $1::vector AS distance FROM concierge_kb_chunks WHERE lang=$2 ORDER BY embedding <=> $1::vector LIMIT 3",

@@ -4,7 +4,7 @@ import { scenarios } from "./scenarios";
 async function main() {
   const live = process.argv.includes("--live");
   if (live) {
-    if (!process.env.GEMINI_API_KEY)
+    if (!process.env.GEMINI_API_KEY && !process.env.GEMINI_API_KEYS)
       throw new Error("evals:live requires GEMINI_API_KEY");
     delete process.env.CONCIERGE_MOCK;
   } else process.env.CONCIERGE_MOCK = "1";

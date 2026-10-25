@@ -1,4 +1,4 @@
-# Qudra Concierge - build spec
+# Front Desk Concierge - build spec
 Agentic AI front desk for appointment-based small businesses (demo business: "Noor Dental & Beauty Studio", fictional). Bilingual EN/AR with RTL. Next.js 15 App Router, TypeScript, Tailwind v4, lucide-react icons only. No fake stats/testimonials/reviews. Fictional address only, no real city/country names.
 
 ## Data layer

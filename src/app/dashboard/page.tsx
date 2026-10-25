@@ -218,11 +218,11 @@ export default function Dashboard() {
   return (
     <div className="dashboard-shell">
       <aside className="sidebar">
-        <Link className="qudra-mark" href="/">
+        <Link className="brand-mark" href="/">
           <span>
             <Flower2 size={25} />
           </span>
-          qudra<small>CONCIERGE</small>
+          frontdesk<small>CONCIERGE</small>
         </Link>
         <div className="workspace-label">WORKSPACE</div>
         <div className="workspace-card">
@@ -815,7 +815,7 @@ export default function Dashboard() {
             </section>
           </div>
           <footer className="dash-footer">
-            <span>Qudra Concierge · Noor Studio demo</span>
+            <span>Front Desk Concierge · Noor Studio demo</span>
             <span>Postgres (hosted via DATABASE_URL, or local PGlite)</span>
           </footer>
         </main>

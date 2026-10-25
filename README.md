@@ -1,4 +1,4 @@
-# Qudra Concierge
+# Front Desk Concierge
 
 **An agentic AI front desk for appointment-based businesses such as clinics and salons.** It books, reschedules and cancels real appointments, answers from the business's own knowledge base, and hands off to staff. It works in English and Arabic (including dialects) and shows every decision it makes in a live trace.
 
@@ -115,4 +115,4 @@ Next.js 15 (App Router), TypeScript, Tailwind v4, `@google/genai` (Gemini functi
 ## Credits
 Bootstrapped from [`create-next-app`](https://github.com/vercel/next.js/tree/canary/packages/create-next-app) (MIT). "Noor Dental & Beauty Studio" is a fictional business, and all of its data is demo seed data.
 
-Built by [Maeen Alganimi](https://github.com/MaeenAlganimi) · Qudra Labs · MIT License
+Built by [Maeen Alganimi](https://github.com/MaeenAlganimi) · Maeen Alganimi · MIT License

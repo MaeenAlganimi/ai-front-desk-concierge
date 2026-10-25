@@ -798,7 +798,7 @@ html[lang="ar"] .hero-art {
   flex-direction: column;
   z-index: 30;
 }
-.qudra-mark {
+.brand-mark {
   display: flex;
   align-items: center;
   gap: 9px;
@@ -808,7 +808,7 @@ html[lang="ar"] .hero-art {
   position: relative;
   padding-bottom: 22px;
 }
-.qudra-mark > span {
+.brand-mark > span {
   display: grid;
   place-items: center;
   background: #e9f2ed;
@@ -817,7 +817,7 @@ html[lang="ar"] .hero-art {
   width: 37px;
   color: #25785d;
 }
-.qudra-mark small {
+.brand-mark small {
   position: absolute;
   left: 47px;
   bottom: 10px;
@@ -2228,16 +2228,16 @@ html[lang="ar"] .hero-art {
     width: 65px;
     padding: 23px 12px;
   }
-  .qudra-mark {
+  .brand-mark {
     font-size: 0;
     gap: 0;
     justify-content: center;
   }
-  .qudra-mark > span {
+  .brand-mark > span {
     width: 35px;
     height: 35px;
   }
-  .qudra-mark small,
+  .brand-mark small,
   .workspace-label,
   .workspace-card,
   .demo-label,
@@ -2644,7 +2644,7 @@ html[lang="ar"] .hero-art {
     width: 51px;
     padding: 20px 7px;
   }
-  .qudra-mark > span {
+  .brand-mark > span {
     width: 31px;
     height: 31px;
   }

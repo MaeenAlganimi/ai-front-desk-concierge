@@ -471,7 +471,7 @@ export default function Home() {
         <div className="footer-bottom">
           <span>{c.demo}</span>
           <span>
-            POWERED BY <b>qudra</b>
+            POWERED BY <b>frontdesk</b>
           </span>
           <Link href="/dashboard">
             {ar ? "لوحة الفريق" : "Staff console"}

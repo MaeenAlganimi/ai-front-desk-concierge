@@ -16,7 +16,7 @@ const b64url = (buf: ArrayBuffer) =>
 async function hmac(data: string, key: string) {
   const k = await crypto.subtle.importKey(
     "raw",
-    enc.encode(`qudra-concierge:${key}`),
+    enc.encode(`ai-front-desk-concierge:${key}`),
     { name: "HMAC", hash: "SHA-256" },
     false,
     ["sign"],

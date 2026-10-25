@@ -15,7 +15,7 @@ const arabic = IBM_Plex_Sans_Arabic({
 export const metadata: Metadata = {
   title: "Noor Studio · A little care, a little glow",
   description:
-    "A fictional dental and beauty studio, with a bilingual AI concierge powered by Qudra.",
+    "A fictional dental and beauty studio, with a bilingual AI concierge powered by Front Desk.",
 };
 export default function RootLayout({
   children,

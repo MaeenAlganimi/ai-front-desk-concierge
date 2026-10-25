@@ -5,7 +5,7 @@
   var script = document.currentScript;
   var base = new URL(script ? script.src : "/widget.js", location.href).origin;
   var business = (script && script.dataset.business) || "noor";
-  var key = "qudra-concierge:" + business;
+  var key = "ai-front-desk-concierge:" + business;
   var state = { conversationId: "", phone: "", messages: [], pending: null };
   try {
     var saved = JSON.parse(localStorage.getItem(key) || "{}");
@@ -35,7 +35,7 @@
     } catch (_) {}
   }
   var host = document.createElement("div");
-  host.id = "qudra-concierge";
+  host.id = "ai-front-desk-concierge";
   document.body.appendChild(host);
   var root = host.attachShadow({ mode: "open" });
   root.innerHTML =
@@ -84,7 +84,7 @@
         : tr("Your phone number", "رقم الهاتف"),
     );
     root.querySelector(".powered").textContent = tr(
-      "Powered by Qudra · Demo reminders do not send SMS",
+      "Powered by Front Desk · Demo reminders do not send SMS",
       "بواسطة قدرة · التذكيرات تجريبية دون رسائل نصية",
     );
     renderChips();

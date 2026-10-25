@@ -1,5 +1,7 @@
 # Front Desk Concierge
 
+**Live demo:** https://ai-front-desk-concierge.onrender.com (free instance; first load can take ~50 s to wake)
+
 **An agentic AI front desk for appointment-based businesses such as clinics and salons.** It books, reschedules and cancels real appointments, answers from the business's own knowledge base, and hands off to staff. It works in English and Arabic (including dialects) and shows every decision it makes in a live trace.
 
 It is not a chatbot wrapper. The model plans with **Gemini function calling** against a real Postgres database. The application, not the model, enforces the rules: **no write happens without the customer's explicit confirmation**.

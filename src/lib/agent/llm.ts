@@ -394,7 +394,7 @@ export class FallbackLLM implements LLM {
   async plan(c: PlannerContext): Promise<Plan> {
     if (!this.guided) {
       try {
-        // Whole-turn budget so a slow key pool never outlasts the widget's wait; past it the guided demo answers.
+        // Whole-turn budget so a slow key never outlasts the widget's wait; past it the guided demo answers.
         const left = this.deadline - Date.now();
         if (left <= 0) throw new Error("live AI turn budget timeout");
         let timer: ReturnType<typeof setTimeout> | undefined;

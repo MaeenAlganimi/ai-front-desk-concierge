@@ -6,32 +6,33 @@ import { checkVisitor, resetRateLimit, LIVE_PER_HOUR } from "../src/lib/ratelimi
 const ctx = { message: "How much is a cleaning?", lang: "en" as const, history: [], results: [], today: "2026-10-26" };
 afterEach(() => {
   delete process.env.GEMINI_API_KEYS;
+  delete process.env.GEMINI_API_KEY;
   resetKeyPool();
   resetRateLimit();
 });
-describe("key pool", () => {
-  it("parses comma-separated keys and rotates on quota errors", async () => {
-    process.env.GEMINI_API_KEYS = "a, b ,c";
-    expect(geminiKeys()).toEqual(["a", "b", "c"]);
-    const tried: string[] = [];
-    const out = await withKeys(async (k) => {
-      tried.push(k);
-      if (k !== "c") throw new Error("429 RESOURCE_EXHAUSTED quota");
-      return k;
-    });
-    expect(out).toBe("c");
-    expect(tried).toEqual(["a", "b", "c"]);
-    expect(availableKeys()).toEqual(["c"]);
+describe("single key", () => {
+  it("uses only GEMINI_API_KEY and ignores GEMINI_API_KEYS", () => {
+    process.env.GEMINI_API_KEYS = "a,b,c";
+    process.env.GEMINI_API_KEY = "only";
+    expect(geminiKeys()).toEqual(["only"]);
   });
-  it("does not rotate on non-quota errors", async () => {
-    process.env.GEMINI_API_KEYS = "a,b";
+  it("does not try another key on quota errors; the key rests instead", async () => {
+    process.env.GEMINI_API_KEY = "only";
+    const tried: string[] = [];
+    await expect(withKeys(async (k) => { tried.push(k); throw new Error("429 RESOURCE_EXHAUSTED quota"); })).rejects.toThrow();
+    expect(tried).toEqual(["only"]);
+    expect(availableKeys()).toEqual([]);
+  });
+  it("does not rest the key on non-quota errors", async () => {
+    process.env.GEMINI_API_KEY = "only";
     await expect(withKeys(async () => { throw new Error("400 bad request"); })).rejects.toThrow("400");
-    expect(availableKeys().length).toBe(2);
+    expect(availableKeys()).toEqual(["only"]);
   });
 });
 describe("guided fallback", () => {
   it("switches to the scripted planner when live AI fails", async () => {
     process.env.GEMINI_API_KEYS = "a";
+    process.env.GEMINI_API_KEY = "only";
     const broken: LLM = { mode: "gemini", plan: async () => { throw new Error("All Gemini keys unavailable"); } };
     const llm = new FallbackLLM(broken, new MockLLM());
     expect(llm.mode).toBe("gemini");

@@ -1,23 +1,21 @@
 /**
- * Gemini key pool. GEMINI_API_KEYS is a comma-separated list (GEMINI_API_KEY is also accepted).
- * A key that hits a quota/429, an auth error or a timeout is rested for a while and the next key is used.
+ * Single Gemini key. This app uses exactly one key from its own Google Cloud project (GEMINI_API_KEY).
+ * There is deliberately no multi-key rotation. When the key hits quota, an auth error or a timeout,
+ * it is rested for a while and the assistant answers in guided demo mode instead.
  */
-const cooling = new Map<string, number>();
-let cursor = 0;
+let restedUntil = 0;
 
 export function geminiKeys(): string[] {
-  const raw = [process.env.GEMINI_API_KEYS || "", process.env.GEMINI_API_KEY || ""].join(",");
-  return [...new Set(raw.split(",").map((k) => k.trim()).filter(Boolean))];
+  const key = (process.env.GEMINI_API_KEY || "").trim();
+  return key ? [key] : [];
 }
 export function hasGeminiKeys() {
   return geminiKeys().length > 0 && process.env.CONCIERGE_MOCK !== "1";
 }
 export function availableKeys(now = Date.now()): string[] {
-  const keys = geminiKeys();
-  const start = cursor % Math.max(1, keys.length);
-  return [...keys.slice(start), ...keys.slice(0, start)].filter((k) => (cooling.get(k) || 0) <= now);
+  return restedUntil <= now ? geminiKeys() : [];
 }
-/** Classifies an error as one that should move on to another key. */
+/** Errors that mean the key should rest (and guided mode take over). */
 export function isRotatable(error: unknown) {
   const msg = String(error);
   return (
@@ -25,37 +23,32 @@ export function isRotatable(error: unknown) {
     (error as { name?: string })?.name === "TimeoutError"
   );
 }
-export function restKey(key: string, error: unknown, now = Date.now()) {
+export function restKey(_key: string, error: unknown, now = Date.now()) {
   const msg = String(error);
   const ms = /PerDay|per day|401|403|API key not valid|API_KEY_INVALID|PERMISSION_DENIED/i.test(msg)
     ? 60 * 60_000
     : /429|RESOURCE_EXHAUSTED|quota/i.test(msg)
       ? 10 * 60_000
       : 2 * 60_000;
-  cooling.set(key, now + ms);
-  const keys = geminiKeys();
-  cursor = (keys.indexOf(key) + 1) % Math.max(1, keys.length);
+  restedUntil = now + ms;
 }
 export class AllKeysFailed extends Error {
   constructor(last?: unknown) {
-    super(`All Gemini keys unavailable: ${String(last ?? "none ready").slice(0, 200)}`);
+    super(`Gemini key unavailable: ${String(last ?? "resting").slice(0, 200)}`);
   }
 }
-/** Runs fn with each ready key in turn until one succeeds. */
+/** Runs fn with the single key; on quota/timeout the key rests and the caller falls back to guided mode. */
 export async function withKeys<T>(fn: (key: string) => Promise<T>): Promise<T> {
-  let last: unknown;
-  for (const key of availableKeys()) {
-    try {
-      return await fn(key);
-    } catch (error) {
-      if (!isRotatable(error)) throw error;
-      last = error;
-      restKey(key, error);
-    }
+  const [key] = availableKeys();
+  if (!key) throw new AllKeysFailed();
+  try {
+    return await fn(key);
+  } catch (error) {
+    if (!isRotatable(error)) throw error;
+    restKey(key, error);
+    throw new AllKeysFailed(error);
   }
-  throw new AllKeysFailed(last);
 }
 export function resetKeyPool() {
-  cooling.clear();
-  cursor = 0;
+  restedUntil = 0;
 }

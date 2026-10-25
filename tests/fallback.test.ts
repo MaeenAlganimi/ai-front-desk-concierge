@@ -53,3 +53,15 @@ describe("per-visitor cap", () => {
     expect(checkVisitor("other").live).toBe(true);
   });
 });
+describe("turn budget", () => {
+  it("answers in guided mode when live AI is too slow", async () => {
+    process.env.GEMINI_API_KEYS = "a";
+    process.env.CONCIERGE_LIVE_BUDGET_MS = "50";
+    const slow: LLM = { mode: "gemini", plan: () => new Promise((r) => setTimeout(() => r({ reply: "late" }), 1000)) };
+    const llm = new FallbackLLM(slow, new MockLLM());
+    const plan = await llm.plan(ctx);
+    delete process.env.CONCIERGE_LIVE_BUDGET_MS;
+    expect(llm.mode).toBe("guided");
+    expect(plan.reply).not.toBe("late");
+  });
+});

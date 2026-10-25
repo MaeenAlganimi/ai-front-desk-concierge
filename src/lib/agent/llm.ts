@@ -384,6 +384,7 @@ export class GeminiLLM implements LLM {
  */
 export class FallbackLLM implements LLM {
   private guided: boolean;
+  private deadline = Date.now() + Number(process.env.CONCIERGE_LIVE_BUDGET_MS ?? 35000);
   constructor(private live: LLM = new GeminiLLM(), private script: LLM = new MockLLM(), forceGuided = false) {
     this.guided = forceGuided || availableKeys().length === 0;
   }
@@ -393,7 +394,20 @@ export class FallbackLLM implements LLM {
   async plan(c: PlannerContext): Promise<Plan> {
     if (!this.guided) {
       try {
-        return await this.live.plan(c);
+        // Whole-turn budget so a slow key pool never outlasts the widget's wait; past it the guided demo answers.
+        const left = this.deadline - Date.now();
+        if (left <= 0) throw new Error("live AI turn budget timeout");
+        let timer: ReturnType<typeof setTimeout> | undefined;
+        try {
+          return await Promise.race([
+            this.live.plan(c),
+            new Promise<never>((_, reject) => {
+              timer = setTimeout(() => reject(new Error("live AI turn budget timeout")), left);
+            }),
+          ]);
+        } finally {
+          clearTimeout(timer);
+        }
       } catch (error) {
         console.error("[concierge] live AI unavailable, guided demo mode:", String(error).slice(0, 200));
         (globalThis as { __lastLlmError?: string }).__lastLlmError = String(error).slice(0, 300);

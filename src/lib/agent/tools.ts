@@ -17,6 +17,8 @@ export type ToolContext = {
   db: Queryable;
   conversationId: string;
   customerId?: string;
+  /** Validate a write tool without writing (used before showing a proposal). */
+  dryRun?: boolean;
 };
 const day = z
   .string()
@@ -75,14 +77,15 @@ export const toolDeclarations = Object.entries(toolSchemas).map(
     description: (
       {
         check_availability:
-          "Find available studio slots within opening hours. date_from, date_to and after_time are in the studio's local timezone; results include starts_at (UTC) and starts_at_local (studio local time with offset).",
+          "Find available studio slots within opening hours, earliest first. date_from, date_to and after_time are in the studio's local timezone. When the customer names a time (\"at 5pm\", \"after 5pm\"), pass it as after_time (HH:MM, 24h) so the earliest slots at or after it come first. Pass staff (id or name, e.g. \"sara\") when the customer names a staff member. Results include starts_at (UTC, pass unchanged to write tools) and starts_at_local (studio local time to show the customer).",
         lookup_customer:
-          "Look up customer and their booked appointments by phone or name.",
-        book_appointment: "Propose booking a slot; requires user confirmation.",
+          "Look up the customer and their upcoming booked appointments (earliest first) by phone or name. Each appointment includes id, service_id, staff_id, starts_at (UTC), starts_at_local and weekday_local (studio local time).",
+        book_appointment:
+          "Propose booking a slot returned by check_availability (service id, staff id, starts_at exactly as returned). Nothing is written until the customer confirms in the app, so propose the best matching slot instead of asking the customer to pick from a list. If the requested time is taken, propose the earliest available slot after it with the requested staff member.",
         reschedule_appointment:
-          "Propose moving an existing appointment; requires confirmation.",
+          "Propose moving an existing appointment (appointment_id from lookup_customer) to a slot returned by check_availability. Nothing is written until the customer confirms, so propose the earliest slot that satisfies the request.",
         cancel_appointment:
-          "Propose cancelling an existing appointment; requires confirmation.",
+          "Propose cancelling an existing appointment (appointment_id from lookup_customer). Nothing is written until the customer confirms; the confirmation message names the appointment.",
         create_reminder:
           "Propose scheduling a reminder. Use $previous as appointment_id for a new booking or move in the same plan.",
         answer_from_knowledge_base:
@@ -113,11 +116,20 @@ async function serviceFor(db: Queryable, value: string) {
     )
   ).rows[0];
 }
-async function staffFor(db: Queryable, value?: string) {
+export async function staffFor(db: Queryable, value?: string) {
+  // Customers say "Sara" or "Dr. Sara"; match the id or name case-insensitively, ignoring titles.
+  const v = value?.trim().replace(/^(dr\.?|doctor|د\.?|دكتور[ةه]?)\s+/i, "") || null;
+  const rows = (
+    await db.query<Staff>(
+      "SELECT * FROM concierge_staff WHERE ($1::text IS NULL OR lower(id)=lower($1) OR lower(name)=lower($1) OR name_ar=$1) ORDER BY id",
+      [v],
+    )
+  ).rows;
+  if (rows.length || !v) return rows;
   return (
     await db.query<Staff>(
-      "SELECT * FROM concierge_staff WHERE ($1::text IS NULL OR id=$1 OR lower(name)=lower($1) OR name_ar=$1) ORDER BY id",
-      [value || null],
+      "SELECT * FROM concierge_staff WHERE position(lower($1) in lower(name))>0 OR position($1 in name_ar)>0 ORDER BY id",
+      [v],
     )
   ).rows;
 }
@@ -127,6 +139,7 @@ async function slotAvailable(
   staff: Staff,
   start: Date,
   exclude?: string,
+  customerId?: string,
 ) {
   if (
     !staff.service_ids.includes(service.id) ||
@@ -156,7 +169,16 @@ async function slotAvailable(
     "SELECT id FROM concierge_appointments WHERE status='booked' AND staff_id=$1 AND starts_at < $3 AND ends_at > $2 AND ($4::text IS NULL OR id<>$4)",
     [staff.id, start.toISOString(), end.toISOString(), exclude || null],
   );
-  return conflicts.rows.length === 0;
+  if (conflicts.rows.length) return false;
+  // A customer cannot be in two appointments at once (e.g. moving into a slot that overlaps another of their bookings).
+  if (customerId) {
+    const own = await db.query(
+      "SELECT id FROM concierge_appointments WHERE status='booked' AND customer_id=$1 AND starts_at < $3 AND ends_at > $2 AND ($4::text IS NULL OR id<>$4)",
+      [customerId, start.toISOString(), end.toISOString(), exclude || null],
+    );
+    if (own.rows.length) return false;
+  }
+  return true;
 }
 export async function executeTool(
   name: string,
@@ -185,9 +207,13 @@ export async function executeTool(
       +to - +from > 31 * 86400000
     )
       return { error: "Choose a valid date range of at most 31 days" };
-    const staff = (await staffFor(db, a.staff as string | undefined)).filter(
-      (p) => p.service_ids.includes(s.id),
-    );
+    const named = await staffFor(db, a.staff as string | undefined);
+    if (a.staff && !named.length)
+      return {
+        error: `Unknown staff member: ${String(a.staff)}`,
+        staff_options: (await staffFor(db)).filter((p) => p.service_ids.includes(s.id)).map((p) => ({ id: p.id, name: p.name })),
+      };
+    const staff = named.filter((p) => p.service_ids.includes(s.id));
     const slots: {
       starts_at: string;
       starts_at_local: string;
@@ -224,7 +250,7 @@ export async function executeTool(
         const hhmm = `${String(Math.floor(minute / 60)).padStart(2, "0")}:${String(minute % 60).padStart(2, "0")}`;
         const start = zonedToUtc(d.toISOString().slice(0, 10), hhmm, tz);
         for (const p of staff)
-          if (await slotAvailable(db, s, p, start))
+          if (await slotAvailable(db, s, p, start, undefined, ctx.customerId))
             slots.push({
               starts_at: start.toISOString(),
               starts_at_local: toZonedIso(start, tz),
@@ -252,13 +278,18 @@ export async function executeTool(
       )
     ).rows[0];
     if (!customer) return { customer: null, appointments: [] };
+    const tz = await businessTimeZone(db);
     const appointments = (
-      await db.query(
+      await db.query<{ starts_at: Date | string; ends_at: Date | string }>(
         "SELECT a.*, s.name AS service_name FROM concierge_appointments a JOIN concierge_services s ON s.id=a.service_id WHERE customer_id=$1 AND status='booked' AND starts_at>now() ORDER BY starts_at",
         [customer.id],
       )
-    ).rows;
-    return { customer, appointments };
+    ).rows.map((row) => ({
+      ...row,
+      starts_at_local: toZonedIso(new Date(row.starts_at), tz),
+      weekday_local: ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"][zonedParts(new Date(row.starts_at), tz).weekday],
+    }));
+    return { customer, appointments, timezone: tz };
   }
   if (name === "answer_from_knowledge_base") {
     const embedding = await embed(String(a.query));
@@ -287,10 +318,11 @@ export async function executeTool(
     const s = await serviceFor(db, String(a.service));
     const staff = (await staffFor(db, String(a.staff)))[0];
     const start = new Date(String(a.starts_at));
-    if (!s || !staff || !(await slotAvailable(db, s, staff, start)))
+    if (!s || !staff || !(await slotAvailable(db, s, staff, start, undefined, ctx.customerId)))
       return {
         error: "This slot is no longer available. Please choose another time.",
       };
+    if (ctx.dryRun) return { ok: true };
     const id = randomUUID();
     await db.query(
       "INSERT INTO concierge_appointments (id,customer_id,service_id,staff_id,starts_at,ends_at,source) VALUES ($1,$2,$3,$4,$5,$6,'agent')",
@@ -312,6 +344,8 @@ export async function executeTool(
       staff: staff.name,
     };
   }
+  if (ctx.dryRun && name === "create_reminder" && a.appointment_id === "$previous")
+    return { ok: true };
   const appointment = (
     await db.query<Appointment>(
       "SELECT * FROM concierge_appointments WHERE id=$1 AND customer_id=$2 AND status='booked'",
@@ -320,6 +354,7 @@ export async function executeTool(
   ).rows[0];
   if (!appointment)
     return { error: "No matching active appointment for this customer" };
+  if (ctx.dryRun && name !== "reschedule_appointment") return { ok: true };
   if (name === "cancel_appointment") {
     await db.query(
       "UPDATE concierge_appointments SET status='cancelled' WHERE id=$1",
@@ -337,10 +372,11 @@ export async function executeTool(
       await staffFor(db, String(a.staff || appointment.staff_id))
     )[0];
     const start = new Date(String(a.starts_at));
-    if (!staff || !(await slotAvailable(db, s, staff, start, appointment.id)))
+    if (!staff || !(await slotAvailable(db, s, staff, start, appointment.id, ctx.customerId)))
       return {
         error: "This slot is no longer available. Please choose another time.",
       };
+    if (ctx.dryRun) return { ok: true };
     await db.query(
       "UPDATE concierge_appointments SET starts_at=$2,ends_at=$3,staff_id=$4,source='agent' WHERE id=$1",
       [

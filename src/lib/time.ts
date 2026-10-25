@@ -60,3 +60,12 @@ export function toZonedIso(instant: Date, tz: string) {
 }
 
 export const todayIn = (tz: string, now = new Date()) => zonedParts(now, tz).date;
+
+/** Human-readable studio-local time, e.g. "2026-10-25 09:00 (Asia/Dubai)". Never shows raw UTC unless the business is in UTC. */
+export function formatLocal(instant: Date | string, tz: string) {
+  const p = zonedParts(new Date(instant), tz);
+  return `${p.date} ${p.time} (${tz})`;
+}
+
+/** Local "HH:MM" wall-clock time of an instant in tz. */
+export const localTime = (instant: Date | string, tz: string) => zonedParts(new Date(instant), tz).time;

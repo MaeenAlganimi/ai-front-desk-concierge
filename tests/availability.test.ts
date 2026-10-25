@@ -274,3 +274,49 @@ describe("conversation memory and validation", () => {
     ).toBe(before);
   });
 });
+
+describe("staff names and customer overlaps", () => {
+  let fresh: Database;
+  const fcid = randomUUID();
+  beforeAll(async () => {
+    fresh = await createDatabase();
+    await fresh.query("INSERT INTO concierge_conversations (id,customer_id) VALUES ($1,'amina')", [fcid]);
+  });
+  afterAll(() => fresh?.close());
+  const fctx = () => ({ db: fresh, conversationId: fcid, customerId: "amina" });
+  it("resolves staff by first name or title, case-insensitively", async () => {
+    for (const staff of ["Sara", "sara", "Dr. Sara", "Dr. Sara Noor", "SARA"]) {
+      const r = await executeTool(
+        "check_availability",
+        { service: "cleaning", date_from: date, date_to: date, after_time: "17:00", staff },
+        fctx(),
+      );
+      const slots = r.slots as { starts_at: string; staff: string }[];
+      expect(slots[0], staff).toMatchObject({ staff: "sara", starts_at: `${date}T17:45:00.000Z` });
+    }
+  });
+  it("reports an unknown staff member instead of returning no slots", async () => {
+    const r = await executeTool(
+      "check_availability",
+      { service: "cleaning", date_from: date, date_to: date, staff: "Zed" },
+      fctx(),
+    );
+    expect(r.error).toMatch(/Unknown staff/);
+    expect((r.staff_options as { id: string }[]).map((s) => s.id)).toEqual(["omar", "sara"]);
+  });
+  it("does not offer or book a slot that overlaps the customer's own appointment", async () => {
+    // Amina is with Sara 17:00–17:45; Omar is free at 17:00 but Amina cannot attend two appointments at once.
+    const r = await executeTool(
+      "check_availability",
+      { service: "cleaning", date_from: date, date_to: date, after_time: "17:00", staff: "omar" },
+      fctx(),
+    );
+    expect((r.slots as { starts_at: string }[])[0].starts_at).toBe(`${date}T17:45:00.000Z`);
+    const booked = await executeTool(
+      "book_appointment",
+      { service: "cleaning", staff: "omar", starts_at: `${date}T17:00:00.000Z` },
+      fctx(),
+    );
+    expect(booked.error).toBeTruthy();
+  });
+});

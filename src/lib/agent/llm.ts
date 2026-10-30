@@ -31,7 +31,7 @@ export function parseIntent(message: string, today = isoDay()) {
   else if (/\bcancel\b|الغي|ألغي|الغ[يى]|إلغاء|كنسل/.test(text))
     action = "cancel";
   else if (
-    /human|person|reception|staff|handoff|manager|موظف|بشر[يى]|الفريق|الاستقبال|شخص/.test(
+    /human|person|reception|staff|team|handoff|manager|موظف|بشر[يى]|الفريق|الاستقبال|شخص/.test(
       text,
     )
   )
